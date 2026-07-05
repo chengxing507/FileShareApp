@@ -21,13 +21,8 @@ android {
     }
 
     signingConfigs {
-        debug {
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-            storePassword = "android"
-        }
-        release {
+        // release 签名配置（从环境变量读取，由 CI 传入）
+        create("release") {
             val keystorePath = System.getenv("KEYSTORE_PATH")
             if (!keystorePath.isNullOrEmpty()) {
                 storeFile = file(keystorePath)
@@ -41,7 +36,7 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            // 使用 AGP 默认的 debug signing config（~/.android/debug.keystore）
         }
         release {
             isMinifyEnabled = false
@@ -49,7 +44,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 如果 release signing 未配置，回退到 debug 签名
+            // 优先使用 release 签名，未配置时回退到 debug 签名
             signingConfig = signingConfigs.findByName("release")?.takeIf {
                 it.storeFile?.exists() == true && !it.storePassword.isNullOrEmpty()
             } ?: signingConfigs.getByName("debug")
