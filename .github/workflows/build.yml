@@ -46,11 +46,17 @@ jobs:
             go build -ldflags="-s -w" -o filebrowser-arm64 .
           echo "::endgroup::"
 
-          echo "::group::📦 Copying binary to Android assets"
+          echo "::group::📦 Copying binary to Android assets & jniLibs"
           mkdir -p ../app/src/main/assets
           cp filebrowser-arm64 ../app/src/main/assets/
           ls -lh ../app/src/main/assets/filebrowser-arm64
-          file ../app/src/main/assets/filebrowser-arm64
+
+          # 同时复制到 jniLibs 目录 —— Android 安装 APK 时
+          # 会自动提取到可执行的 native lib 目录，绕过 noexec 限制
+          mkdir -p ../app/src/main/jniLibs/arm64-v8a
+          cp filebrowser-arm64 ../app/src/main/jniLibs/arm64-v8a/libfilebrowser.so
+          ls -lh ../app/src/main/jniLibs/arm64-v8a/libfilebrowser.so
+          file ../app/src/main/jniLibs/arm64-v8a/libfilebrowser.so
           echo "::endgroup::"
 
       # ==========================================

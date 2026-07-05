@@ -146,8 +146,8 @@ class FileServerService : LifecycleService() {
 
         serverJob = serviceScope.launch {
             try {
-                // 1. 解压二进制文件
-                val binaryFile = BinaryManager.extractBinary(this@FileServerService)
+                // 1. 查找或解压二进制文件（优先使用 native lib 目录）
+                val binaryFile = BinaryManager.findOrExtractBinary(this@FileServerService)
                 val dbPath = File(filesDir, "filebrowser.db").absolutePath
 
                 // 2. 通知 UI 正在启动

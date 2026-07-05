@@ -1,42 +1,96 @@
 package com.example.fileshare.util
 
 import android.content.Context
+import android.os.Build
+import android.system.Os
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 
 /**
- * 管理 FileBrowser 二进制文件的解压、权限设置和进程生命周期
+ * 管理 FileBrowser 二进制文件的定位、权限设置和进程生命周期
+ *
+ * ⚠️ Android 8.0+ 对 /data/data/<pkg>/files 使用 noexec 挂载，
+ * 普通文件无法获得执行权限。解决方案（优先级从高到低）：
+ *
+ * 1. nativeLibDir — APK 安装时系统自动提取，目录可执行（最可靠）
+ * 2. /data/local/tmp/ — 部分 Android 版本可写可执行
+ * 3. filesDir — 仅 Android 7.x 及以下可用
  */
 object BinaryManager {
 
     private const val TAG = "BinaryManager"
     private const val BINARY_NAME = "filebrowser-arm64"
+    private const val BINARY_NAME_SO = "libfilebrowser.so"
+    private const val EXEC_DIR = "/data/local/tmp"
 
     private var process: Process? = null
     private var outputReaderThread: Thread? = null
 
     /**
-     * 从 assets 解压二进制文件到 app 私有目录并赋予可执行权限
+     * 查找或解压二进制文件，返回可执行的 File 对象
+     *
+     * 查找优先级：
+     *   1. nativeLibDir/libfilebrowser.so（APK 安装时系统提取，可执行）
+     *   2. /data/local/tmp/filebrowser-arm64（可执行目录）
+     *   3. filesDir/filebrowser-arm64（从 assets 解压，仅旧设备可用）
      */
-    fun extractBinary(context: Context): File {
-        val binaryFile = File(context.filesDir, BINARY_NAME)
-
-        // 如果已存在则覆盖更新
-        if (binaryFile.exists()) {
-            binaryFile.delete()
+    fun findOrExtractBinary(context: Context): File {
+        // === 优先级 1: native lib 目录（系统提取，保证可执行）===
+        val nativeLibFile = File(context.applicationInfo.nativeLibDir, BINARY_NAME_SO)
+        if (nativeLibFile.exists()) {
+            Log.d(TAG, "✅ 使用 native lib: ${nativeLibFile.absolutePath}")
+            return nativeLibFile
         }
 
+        // === 优先级 2: 解压到 /data/local/tmp/ ===
+        val tmpDir = File(EXEC_DIR)
+        if (tmpDir.exists() && tmpDir.canWrite()) {
+            val tmpFile = File(tmpDir, BINARY_NAME)
+            return extractBinary(context, tmpFile)
+        }
+
+        // === 优先级 3: 兜底解压到 filesDir ===
+        Log.w(TAG, "native lib 和 $EXEC_DIR 都不可用，回退到 filesDir")
+        val fallbackFile = File(context.filesDir, BINARY_NAME)
+        return extractBinary(context, fallbackFile)
+    }
+
+    /**
+     * 从 assets 解压二进制文件到目标路径并设置可执行权限
+     */
+    private fun extractBinary(context: Context, targetFile: File): File {
+        // 覆盖旧文件
+        if (targetFile.exists()) {
+            targetFile.delete()
+        }
+
+        // 确保父目录存在
+        targetFile.parentFile?.mkdirs()
+
+        // 从 assets 复制二进制
         context.assets.open(BINARY_NAME).use { input ->
-            FileOutputStream(binaryFile).use { output ->
+            FileOutputStream(targetFile).use { output ->
                 input.copyTo(output)
             }
         }
 
         // 设置可执行权限
-        binaryFile.setExecutable(true, false)
-        Log.d(TAG, "Binary extracted to ${binaryFile.absolutePath}")
-        return binaryFile
+        targetFile.setExecutable(true, false)
+        targetFile.setReadable(true, false)
+        targetFile.setWritable(true, false)
+
+        // API 26+ 使用 Os.chmod 确保权限生效
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                Os.chmod(targetFile.absolutePath, 0o755)
+            } catch (e: Exception) {
+                Log.w(TAG, "Os.chmod failed (may still work): ${e.message}")
+            }
+        }
+
+        Log.d(TAG, "Binary ready at ${targetFile.absolutePath}")
+        return targetFile
     }
 
     /**
