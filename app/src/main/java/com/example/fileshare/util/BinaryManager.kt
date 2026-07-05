@@ -41,9 +41,9 @@ object BinaryManager {
         val nativeLibDir = try {
             context.packageManager
                 .getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
-                .nativeLibDir
+                .nativeLibraryDir
         } catch (e: Exception) {
-            context.applicationInfo.nativeLibDir
+            context.applicationInfo.nativeLibraryDir
         }
         val nativeLibFile = File(nativeLibDir, BINARY_NAME_SO)
         if (nativeLibFile.exists()) {
