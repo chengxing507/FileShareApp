@@ -1,6 +1,7 @@
 package com.example.fileshare.util
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.system.Os
 import android.util.Log
@@ -37,7 +38,14 @@ object BinaryManager {
      */
     fun findOrExtractBinary(context: Context): File {
         // === 优先级 1: native lib 目录（系统提取，保证可执行）===
-        val nativeLibFile = File(context.applicationInfo.nativeLibDir, BINARY_NAME_SO)
+        val nativeLibDir = try {
+            context.packageManager
+                .getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+                .nativeLibDir
+        } catch (e: Exception) {
+            context.applicationInfo.nativeLibDir
+        }
+        val nativeLibFile = File(nativeLibDir, BINARY_NAME_SO)
         if (nativeLibFile.exists()) {
             Log.d(TAG, "✅ 使用 native lib: ${nativeLibFile.absolutePath}")
             return nativeLibFile
@@ -83,7 +91,7 @@ object BinaryManager {
         // API 26+ 使用 Os.chmod 确保权限生效
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
-                Os.chmod(targetFile.absolutePath, 0o755)
+                Os.chmod(targetFile.absolutePath, 493) // 0755
             } catch (e: Exception) {
                 Log.w(TAG, "Os.chmod failed (may still work): ${e.message}")
             }
