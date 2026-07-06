@@ -37,7 +37,13 @@ object BinaryManager {
      *   3. filesDir/filebrowser-arm64（从 assets 解压，仅旧设备可用）
      */
     fun findOrExtractBinary(context: Context): File {
-        // === 优先级 1: native lib 目录（系统提取，保证可执行）===
+        val result = findBinary(context)
+        Log.d(TAG, "选择路径: ${result.absolutePath} | 可执行: ${result.canExecute()} | 大小: ${result.length()}")
+        return result
+    }
+
+    private fun findBinary(context: Context): File {
+        // === 优先级 1: native lib 目录 ===
         val nativeLibDir = try {
             context.packageManager
                 .getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
@@ -47,21 +53,35 @@ object BinaryManager {
         }
         val nativeLibFile = File(nativeLibDir, BINARY_NAME_SO)
         if (nativeLibFile.exists()) {
-            Log.d(TAG, "✅ 使用 native lib: ${nativeLibFile.absolutePath}")
-            return nativeLibFile
+            if (nativeLibFile.canExecute()) {
+                Log.d(TAG, "✅ 方案1: native lib 可执行 -> ${nativeLibFile.absolutePath}")
+                return nativeLibFile
+            }
+            Log.w(TAG, "⚠️ 方案1: native lib 存在但不可执行，尝试修复权限")
+            try { Os.chmod(nativeLibFile.absolutePath, 493) } catch (_: Exception) {}
+            if (nativeLibFile.setExecutable(true)) {
+                Log.d(TAG, "   修复成功")
+                return nativeLibFile
+            }
         }
 
         // === 优先级 2: 解压到 /data/local/tmp/ ===
         val tmpDir = File(EXEC_DIR)
         if (tmpDir.exists() && tmpDir.canWrite()) {
             val tmpFile = File(tmpDir, BINARY_NAME)
-            return extractBinary(context, tmpFile)
+            extractBinary(context, tmpFile)
+            if (tmpFile.canExecute()) {
+                Log.d(TAG, "✅ 方案2: /data/local/tmp 可执行 -> ${tmpFile.absolutePath}")
+                return tmpFile
+            }
         }
 
         // === 优先级 3: 兜底解压到 filesDir ===
-        Log.w(TAG, "native lib 和 $EXEC_DIR 都不可用，回退到 filesDir")
+        Log.w(TAG, "⚠️ 方案1/2 均不可用，回退到 filesDir")
         val fallbackFile = File(context.filesDir, BINARY_NAME)
-        return extractBinary(context, fallbackFile)
+        extractBinary(context, fallbackFile)
+        Log.d(TAG, "✅ 方案3: filesDir -> ${fallbackFile.absolutePath} (可执行: ${fallbackFile.canExecute()})")
+        return fallbackFile
     }
 
     /**

@@ -40,9 +40,9 @@ jobs:
           git clone --depth=1 https://github.com/filebrowser/filebrowser.git
           echo "::endgroup::"
 
-          echo "::group::🔨 Cross-compiling (GOOS=linux GOARCH=arm64)"
+          echo "::group::🔨 Cross-compiling (GOOS=android GOARCH=arm64, PIE format)"
           cd filebrowser
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+          CGO_ENABLED=0 GOOS=android GOARCH=arm64 \
             go build -ldflags="-s -w" -o filebrowser-arm64 .
           echo "::endgroup::"
 
@@ -53,6 +53,8 @@ jobs:
 
           # 同时复制到 jniLibs 目录 —— Android 安装 APK 时
           # 会自动提取到可执行的 native lib 目录，绕过 noexec 限制
+          # 注意：使用 GOOS=android 编译的二进制是 PIE 格式 (ET_DYN)，
+          # Android 的 PackageManager 才会将其识别为有效的 native lib 并提取
           mkdir -p ../app/src/main/jniLibs/arm64-v8a
           cp filebrowser-arm64 ../app/src/main/jniLibs/arm64-v8a/libfilebrowser.so
           ls -lh ../app/src/main/jniLibs/arm64-v8a/libfilebrowser.so
